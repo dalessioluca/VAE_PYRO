@@ -2,6 +2,8 @@
 import torch
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
+from torch.distributions import constraints
 
 class VAE(torch.nn.Module):
     
@@ -68,19 +70,20 @@ class VAE(torch.nn.Module):
         #-----------------------#
         #----- Enf of Trick ----#
         #-----------------------#
+        batch_size,ch,width,height = imgs.shape
         
-        pyro.module("decoder", self.decoder)
-
         zero  = imgs.new_zeros(1)
         one   = imgs.new_ones(1)
         
-        batch_size,ch,width,height = imgs.shape
-        
+        pyro.module("decoder", self.decoder)
+        sigma_obs = pyro.param("sigma_obs", 0.1*one, constraint=constraints.interval(0.01,0.5))
+
         with pyro.plate('batch_size', batch_size, dim=-1):
             with poutine.scale(scale=self.scale):
                 z = pyro.sample('z_latent', dist.Normal(zero,one).expand([self.dim_z]).to_event(1))
             x = self.decoder(z) #x_mu is between 0 and 1
-            pyro.sample('obs', dist.Normal(x.x_mu,x.x_std).to_event(1), obs=imgs.view(batch_size,-1))
+            #pyro.sample('obs', dist.Normal(x.x_mu,x.x_std).to_event(1), obs=imgs.view(batch_size,-1))
+            pyro.sample('obs', dist.Normal(x.x_mu,sigma_obs).to_event(1), obs=imgs.view(batch_size,-1))
         return x
     
     def reconstruct(self,imgs):
