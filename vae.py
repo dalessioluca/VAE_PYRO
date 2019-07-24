@@ -14,6 +14,7 @@ class VAE(torch.nn.Module):
         self.width  = params['WIDTH']
         self.height = params['HEIGHT']
         self.dim_z  = params['DIM_Z']
+        self.scale  = params['SCALE']
 
         # Instantiate the encoder and decoder
         self.decoder = decoder
@@ -46,7 +47,8 @@ class VAE(torch.nn.Module):
         
         with pyro.plate('batch_size', batch_size, dim=-1):
             z = self.encoder(imgs)
-            pyro.sample('z_latent', dist.Normal(z.z_mu,z.z_std).to_event(1))
+            with poutine.scale(scale=self.scale):
+                pyro.sample('z_latent', dist.Normal(z.z_mu,z.z_std).to_event(1))
             
     def model(self, imgs=None):
         """ 1. sample the latent from the prior:
@@ -75,7 +77,8 @@ class VAE(torch.nn.Module):
         batch_size,ch,width,height = imgs.shape
         
         with pyro.plate('batch_size', batch_size, dim=-1):
-            z = pyro.sample('z_latent', dist.Normal(zero,one).expand([self.dim_z]).to_event(1))
+            with poutine.scale(scale=self.scale):
+                z = pyro.sample('z_latent', dist.Normal(zero,one).expand([self.dim_z]).to_event(1))
             x = self.decoder(z) #x_mu is between 0 and 1
             pyro.sample('obs', dist.Normal(x.x_mu,x.x_std).to_event(1), obs=imgs.view(batch_size,-1))
         return x
