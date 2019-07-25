@@ -1,13 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # FashionMNIST VAE
-
-# In[1]:
-
-
-#import matplotlib.pyplot as plt
-#get_ipython().run_line_magic('matplotlib', 'inline')
 
 import numpy as np
 import torch
@@ -26,10 +16,11 @@ params = {
     'WIDTH' : 28,
     'HEIGHT':28, 
     'DIM_Z':2,
-    'SCALE':2,
+    'SCALE': 1000.0,
     'use_cuda' : torch.cuda.is_available()
     }
 print(params)
+
 
 BATCH_SIZE = 512
 kwargs = {'num_workers': 0, 'pin_memory': params["use_cuda"]}
@@ -42,6 +33,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=BATCH_SIZE, shuffle
 
 from encoder_decoder import *
 from vae import *
+
 encoder = Encoder_CONV(params)
 decoder = Decoder_CONV(params)
 vae = VAE(params,encoder,decoder)
@@ -62,17 +54,24 @@ else:
     NUM_EPOCHS = 101
     
 # setup the optimizer
-optimizer = Adamax({"lr": 1.0e-2, "betas":(0.9, 0.999)})
+optimizer = Adamax({"lr": 1.0e-3, "betas":(0.9, 0.999)})
 #optimizer = RMSprop({"lr": 1.0e-4})
+
 
 
 svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO(num_particles=1))
 train_loss, test_loss = [], []
 min_loss = 999999
 
+
+# In[9]:
+
+
+#write_dir  = '/Users/ldalessi/VAE_PYRO/ARCHIVE/'
 write_dir = "/home/jupyter/REPOS/VAE_PYRO/ARCHIVE/"
 
-descriptor      = "Fashion_MNIST_scale_2.0"
+descriptor      = "Fashion_MNIST_scale_1000.0"
+descriptor      = "Fashion_TEST"
 name_vae        = "vae_"+descriptor+"_"
 name_train_loss = "train_loss_"+descriptor+"_"
 name_test_loss  = "test_loss_"+descriptor+"_"
@@ -82,8 +81,11 @@ name_params     = "params_"+descriptor
 save_obj(params,write_dir,name_params)
 
 
-#for epoch in range(0,NUM_EPOCHS):
-for epoch in range(0,2):
+# In[10]:
+
+
+# training loop
+for epoch in range(0,5):
     vae.train()            
     
     loss = train(svi,trainloader,use_cuda=params['use_cuda'],verbose=(epoch ==0))
