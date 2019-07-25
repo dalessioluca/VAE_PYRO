@@ -11,6 +11,11 @@ from helper_functions import *
 
 
 
+# ### Define the simulation parameters
+
+# In[2]:
+
+
 params = { 
     'CHANNELS' : 1,
     'WIDTH' : 28,
@@ -22,9 +27,16 @@ params = {
 print(params)
 
 
+# ### Get the data
+
+# In[4]:
+
+
 BATCH_SIZE = 512
 kwargs = {'num_workers': 0, 'pin_memory': params["use_cuda"]}
-data_dir = "/home/jupyter/REPOS/VAE_PYRO"
+#data_dir = "/home/jupyter/REPOS/VAE_PYRO"
+data_dir = "/home/ldalessi/REPOS/VAE_PYRO"
+
 
 trainset = torchvision.datasets.FashionMNIST(data_dir, train=True, download=True, transform=tvt.ToTensor())
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, **kwargs)
@@ -64,11 +76,13 @@ train_loss, test_loss = [], []
 min_loss = 999999
 
 
-# In[9]:
+# In[8]:
 
 
 #write_dir  = '/Users/ldalessi/VAE_PYRO/ARCHIVE/'
-write_dir = "/home/jupyter/REPOS/VAE_PYRO/ARCHIVE/"
+#write_dir = "/home/jupyter/REPOS/VAE_PYRO/ARCHIVE/"
+write_dir = "/home/ldalessi/REPOS/VAE_PYRO/ARCHIVE/"
+
 
 descriptor      = "Fashion_MNIST_scale_1000.0"
 descriptor      = "Fashion_TEST"
@@ -81,13 +95,11 @@ name_params     = "params_"+descriptor
 save_obj(params,write_dir,name_params)
 
 
-# In[10]:
-
 
 # training loop
-for epoch in range(0,5):
+for epoch in range(0,1):
     vae.train()            
-    
+       
     loss = train(svi,trainloader,use_cuda=params['use_cuda'],verbose=(epoch ==0))
     train_loss.append(loss)   
     print("[epoch %03d] train loss: %.4f" % (epoch, loss))
@@ -111,3 +123,4 @@ for epoch in range(0,5):
         save_model(vae,write_dir,name_vae+str(epoch))       
         save_obj(test_loss,write_dir,name_test_loss+str(epoch))
         save_obj(train_loss,write_dir,name_train_loss+str(epoch))
+
