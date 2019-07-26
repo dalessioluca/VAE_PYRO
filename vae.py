@@ -83,8 +83,8 @@ class VAE(torch.nn.Module):
                 z = pyro.sample('z_latent', dist.Normal(zero,one).expand([self.dim_z]).to_event(1))
             x = self.decoder(z) #x_mu is between 0 and 1
             #pyro.sample('obs', dist.Normal(x.x_mu,x.x_std).to_event(1), obs=imgs.view(batch_size,-1))
-            pyro.sample('obs', dist.Normal(x.x_mu,0.1*x.x_std).to_event(1), obs=imgs.view(batch_size,-1))
             #pyro.sample('obs', dist.Normal(x.x_mu,sigma_obs).to_event(1), obs=imgs.view(batch_size,-1))
+            pyro.sample('obs', dist.Normal(x.x_mu,0.1*one).to_event(1), obs=imgs.view(batch_size,-1))
         return x
     
     def reconstruct(self,imgs):

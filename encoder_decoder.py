@@ -55,17 +55,17 @@ class Decoder_CONV(torch.nn.Module):
             torch.nn.ReLU(True),
             torch.nn.ConvTranspose2d(32, 32, 4, 2, 1, 1), # B,  32, 28, 28
             torch.nn.ReLU(True),
-            torch.nn.ConvTranspose2d(32, self.ch, 4, 1, 2)   # B, 1, 28, 28
+            torch.nn.ConvTranspose2d(32, 2*self.ch, 4, 1, 2)   # B, 2*ch, 28, 28
         )
 
     def forward(self,z):
         assert len(z.shape) == 2 
         batch_size = z.shape[0]
         x1 = self.upsample(z).view(batch_size,64,7,7)
-        x_mu = self.decoder(x1).view(batch_size,-1)
-        x_std = torch.ones_like(x_mu)
-        return collections.namedtuple("x", "x_mu x_std")._make([x_mu,x_std])
-
+        tmp_mu, tmp_std  = torch.split(self.decoder(x1),self.ch,dim=1)
+        x_mu  = torch.sigmoid(tmp_mu)
+        x_std = F.softplus(tmp_std)
+        return collections.namedtuple("x", "x_mu x_std")._make([x_mu.view(batch_size,-1),x_std.view(batch_size,-1)])
 
 #------------------------------------
 #------------------------------------
