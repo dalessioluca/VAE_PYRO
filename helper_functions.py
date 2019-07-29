@@ -5,6 +5,7 @@ from torchvision import utils
 import matplotlib.pyplot as plt
 import pyro
 import torch.nn.functional as F
+import numpy as np
 
 
     
@@ -22,9 +23,62 @@ def show_batch(images,nrow=4,npadding=10,title=None):
     if(isinstance(title, str)):
         plt.title(title)
     return fig
-       
+
+
+def lr_finder(svi, loader=None, lr_start=1E-6, lr_end=None, lr_multiplier=1.5, N_max_epoch=None, use_cuda=False):
+    """ Usage:
+        hist_loss,hist_lr = lr_finder(svi, 
+                                      loader=testloader, 
+                                      lr_start=1E-6, 
+                                      lr_multiplier=1.5, 
+                                      N_max_epoch=30, 
+                                      use_cuda=params['use_cuda'])
+    """
     
-def train(svi, loader, use_cuda=False,verbose=False):
+    if(lr_end is None and N_max_epoch is None):
+        raise Exception ("Either lr_end or N_max_epoch need to be scecified to avoid infinite loop")
+        return None,None
+    elif(not(lr_end is None)):
+        N1 = int(np.log(np.float(lr_end)/lr_start)/np.log(np.float(lr_multiplier)))+1
+        if(N_max_epoch is None):
+            N_max_epoch = N1
+        else:
+            N_max_epoch = np.min(N_max_epoch,N1)
+            
+    # replace the optimizer with the scheduler if necessary
+    if(isinstance(svi.optim,pyro.optim.optim.PyroOptim)):
+        optimizer_args    = svi.optim.pt_optim_args    
+        optimizer_pointer = svi.optim.pt_optim_constructor
+        scheduler_args = {'optimizer': optimizer_pointer, 'step_size' : 1, 'gamma' : lr_multiplier, 'optim_args' : optimizer_args}
+        svi.optim = pyro.optim.StepLR(scheduler_args)
+    
+    # check that now I have a pyro scheduler
+    assert(isinstance(svi.optim,pyro.optim.lr_scheduler.PyroLRScheduler))
+    
+    hist_loss, hist_lr = [],[]
+    for epoch in range(0,N_max_epoch): 
+    
+        # perform the training
+        loss_curr = one_epoch_train(svi, loader, use_cuda=use_cuda, verbose=False)
+        
+        # get the current lr
+        lr_curr = next(iter(svi.optim.optim_objs.values())).get_lr()[0] 
+        
+        # step the scheduler (this assumes that scheduler steps one for epoch)
+        svi.optim.step() 
+                    
+        print("[epoch %03d] train loss: %.4f lr: %.4e" % (epoch, loss_curr, lr_curr))
+    
+        hist_loss.append(loss_curr)  
+        hist_lr.append(lr_curr)
+
+        if(np.isnan(loss_curr)):
+            return hist_loss,hist_lr
+    
+    return hist_loss,hist_lr
+
+    
+def one_epoch_train(svi, loader, use_cuda=False,verbose=False):
     epoch_loss = 0.
     for x, _ in loader:
         # if on GPU put mini-batch into CUDA memory
@@ -32,6 +86,7 @@ def train(svi, loader, use_cuda=False,verbose=False):
             x = x.cuda()
         
         loss = svi.step(x)
+        
         if(verbose):
             print("loss=%.5f" %(loss))
         epoch_loss += loss
@@ -39,7 +94,7 @@ def train(svi, loader, use_cuda=False,verbose=False):
     # return epoch loss
     return epoch_loss / len(loader.dataset) 
 
-def train_VAE_pytorch(vae, loader, optimizer, use_cuda=False, verbose=False):
+def one_epoch_train_VAE_pytorch(vae, loader, optimizer, use_cuda=False, verbose=False):
     epoch_loss = 0.
     for x, _ in loader:
         # if on GPU put mini-batch into CUDA memory
@@ -72,7 +127,7 @@ def train_VAE_pytorch(vae, loader, optimizer, use_cuda=False, verbose=False):
 
 
 
-def evaluate(svi, loader, use_cuda=False, verbose=False):
+def one_epoch_evaluate(svi, loader, use_cuda=False, verbose=False):
     epoch_loss = 0.
     for x, _ in loader:
         # if on GPU put mini-batch into CUDA memory
@@ -103,3 +158,33 @@ def save_model(model, root_dir, name):
 def load_model(model, root_dir, name):
     full_file_path= root_dir + name + '.pkl'
     model.load_state_dict(torch.load(full_file_path))
+
+
+### HOW TO DO A LR_FINDER
+#### preparation
+###pr_hist_loss = []
+###pr_hist_lr = []
+###for epoch in range(0,30):
+###    
+###    if(isinstance(svi.optim, pyro.optim.lr_scheduler.PyroLRScheduler)):
+###        svi.optim.step(epoch=epoch) # step the PYRO LR_scheduler 
+###
+###    loss_curr = train(svi, trainloader, use_cuda=params['use_cuda'], verbose=False)
+###    
+###    if(isinstance(svi.optim, pyro.optim.lr_scheduler.PyroLRScheduler)):
+###        pt_scheduler = next(iter(svi.optim.optim_objs.values()))
+###        lr_curr = pt_scheduler.get_lr()[0] 
+###    elif(isinstance(svi.optim, pyro.optim.optim.PyroOptim)):
+###        lr_curr = svi.optim.pt_optim_args['lr']
+###                    
+###    print("[epoch %03d] train loss: %.4f lr: %.4e" % (epoch, loss_curr, lr_curr))
+###    
+###    pr_hist_loss.append(loss_curr)  
+###    pr_hist_lr.append(lr_curr)
+###
+###    if(np.isnan(loss_curr)):
+###        break 
+###        
+###    imgs_rec = vae.reconstruct(imgs_test)
+###    show_batch(imgs_rec,nrow=4,npadding=4,title="epoch = "+str(epoch))
+###    plt.savefig("PYRO_rec_epoch_"+str(epoch)+".png")
